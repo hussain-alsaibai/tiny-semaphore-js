@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Coverage
+coverage/
+*.lcov
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build output (if added later)
+dist/
+build/
+
+# Lockfiles for non-package-manager usage (uncomment if you want to ignore all)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml

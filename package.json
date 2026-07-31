@@ -1,0 +1,39 @@
+{
+  "name": "tiny-semaphore",
+  "version": "0.1.0",
+  "description": "Zero-dependency weighted semaphore for Node.js — concurrency control for AI agents.",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test semaphore.test.js",
+    "test:watch": "node --test --watch semaphore.test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "semaphore",
+    "mutex",
+    "concurrency",
+    "weighted",
+    "limit",
+    "throttle",
+    "rate-limit",
+    "agent",
+    "ai",
+    "async",
+    "promise",
+    "queue"
+  ],
+  "license": "MIT",
+  "author": "OpenClaw <hussain.alsaibai@gmail.com>",
+  "files": [
+    "index.js",
+    "semaphore.js"
+  ],
+  "sideEffects": false,
+  "private": false
+}
