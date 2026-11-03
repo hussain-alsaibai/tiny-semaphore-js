@@ -471,13 +471,37 @@ test('acquire: timeout settles even when nothing else keeps the loop alive', asy
 });
 
 // Regression: the opt-in keeps the old behaviour.
-test('acquire: unrefTimeouts opt-in does not hold the loop open', async () => {
-  const sem = new Semaphore({ permits: 1, unrefTimeouts: true });
-  const r1 = await sem.acquire();
-  const t = Date.now();
-  await assert.rejects(sem.acquire(1, 30), (err) => err instanceof SemaphoreTimeoutError);
-  assert.ok(Date.now() - t < 2000);
-  r1();
+//
+// With unrefTimeouts: true the timer is unref'd, so it does not keep the
+// event loop alive. In a process with nothing else pending, Node exits
+// before the timeout fires. That is the documented trade-off, so the child
+// is expected to print nothing and exit 0.
+//
+// This also has to be a child process: run in-process, the test runner's
+// own event loop keeps the process alive and the timeout fires normally,
+// which is exactly the masking that hid the original bug.
+test('acquire: unrefTimeouts opt-in leaves the timeout to the event loop', async () => {
+  const { execFileSync } = require('node:child_process');
+  const path = require('node:path');
+
+  const script = path.join(__dirname, 'fixtures', 'unref-optin.js');
+  let stdout;
+  try {
+    stdout = execFileSync(process.execPath, [script], {
+      encoding: 'utf8',
+      timeout: 10000,
+    });
+  } catch (err) {
+    assert.fail(
+      'child process did not exit cleanly: ' +
+        (err.stdout || '') +
+        (err.stderr || err.message)
+    );
+  }
+
+  assert.equal(stdout.trim(), '',
+    'expected the opt-in child to exit without settling, got: ' +
+      JSON.stringify(stdout));
 });
 
 // Regression: a pending acquire() must settle on its own.
