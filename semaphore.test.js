@@ -447,6 +447,72 @@ test('drain: queue services one waiter per release (FIFO)', async () => {
 });
 
 // 30
+// Regression: the timeout timer must keep the event loop alive.
+// An unref'd timer let Node drain the loop and exit while acquire() was
+// still waiting, so the promise never settled and never rejected.
+test('acquire: timeout settles even when nothing else keeps the loop alive', async () => {
+  const sem = new Semaphore({ permits: 1 });
+  const r1 = await sem.acquire();
+
+  const t = Date.now();
+  await assert.rejects(
+    sem.acquire(1, 30),
+    (err) => {
+      assert.ok(err instanceof SemaphoreTimeoutError);
+      assert.equal(err.code, 'SEMAPHORE_TIMEOUT');
+      return true;
+    }
+  );
+  const elapsed = Date.now() - t;
+  assert.ok(elapsed >= 25, 'timeout should not fire early (got ' + elapsed + 'ms)');
+  assert.ok(elapsed < 2000, 'timeout should fire promptly (got ' + elapsed + 'ms)');
+
+  r1();
+});
+
+// Regression: the opt-in keeps the old behaviour.
+test('acquire: unrefTimeouts opt-in does not hold the loop open', async () => {
+  const sem = new Semaphore({ permits: 1, unrefTimeouts: true });
+  const r1 = await sem.acquire();
+  const t = Date.now();
+  await assert.rejects(sem.acquire(1, 30), (err) => err instanceof SemaphoreTimeoutError);
+  assert.ok(Date.now() - t < 2000);
+  r1();
+});
+
+// Regression: a pending acquire() must settle on its own.
+//
+// The timeout timer used to be unref'd. An unref'd timer does not keep the
+// event loop alive, so when nothing else was pending Node drained the loop
+// and exited while acquire() was still waiting - the promise never settled
+// and never rejected. The caller saw a silent hang.
+//
+// This has to run in a child process: the test runner keeps the event loop
+// alive by itself, which masks the bug entirely.
+test('acquire: timeout settles in a process with nothing else pending', async () => {
+  const { execFileSync } = require('node:child_process');
+  const path = require('node:path');
+
+  const script = path.join(__dirname, 'fixtures', 'timeout-settles.js');
+  let stdout;
+  try {
+    stdout = execFileSync(process.execPath, [script], {
+      encoding: 'utf8',
+      timeout: 10000,
+    });
+  } catch (err) {
+    assert.fail(
+      'child process did not exit cleanly: ' +
+        (err.stdout || '') +
+        (err.stderr || err.message)
+    );
+  }
+
+  assert.match(stdout, /REJECTED/,
+    'expected the child to report a rejection, got: ' + JSON.stringify(stdout));
+  assert.match(stdout, /SEMAPHORE_TIMEOUT/);
+});
+
 test('version: exposed on instance and exported', () => {
   const sem = new Semaphore();
   assert.equal(sem.version, VERSION);

@@ -379,6 +379,7 @@ on another.
 | Method / Property          | Signature                                  | Description |
 | -------------------------- | ------------------------------------------ | ----------- |
 | `new Semaphore({ permits })` | constructor                              | `permits >= 1` |
+| `new Semaphore({ unrefTimeouts })` | constructor option                    | `true` unrefs the timeout timer so it never holds the event loop open (default `false`) |
 | `tryAcquire(n)`            | `() -> null \| () => void`                 | Non-blocking; returns `null` if no slot |
 | `acquire(n, timeoutMs)`    | `async () => () => void`                   | Throws `SemaphoreTimeoutError` on timeout |
 | `release(n)`               | `(n) => void`                              | Idempotent; clamps on over-release |
@@ -396,6 +397,16 @@ on another.
 | `SemaphoreTimeoutError`    | class                                      | `code = 'SEMAPHORE_TIMEOUT'` |
 
 ---
+
+> **Note on timeouts and the event loop.** A pending `acquire(permits, timeoutMs)`
+> keeps a timer alive so the timeout can actually fire. That timer is *ref'd*
+> by default: if it were not, Node would drain the event loop and exit while
+> `acquire()` was still waiting, and the promise would never settle.
+>
+> If you need a timeout that must never hold your process open, construct the
+> semaphore with `unrefTimeouts: true`. The trade-off is that an
+> `acquire()` waiting on that semaphore may never settle if nothing else
+> keeps the loop alive.
 
 ## Performance
 

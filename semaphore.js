@@ -160,6 +160,8 @@ class Semaphore extends _Emitter {
     this._maxQueueSize = opts.maxQueueSize ?? Infinity;
     /** @type {boolean} */
     this._fairness = opts.fairness !== false;
+    /** @type {boolean} opt-in: do not hold the event loop open for a timeout */
+    this._unrefTimeouts = opts.unrefTimeouts === true;
 
     /**
      * FIFO waiters. Each entry: { permits, resolve, reject, timer, startedAt }
@@ -280,8 +282,19 @@ class Semaphore extends _Emitter {
 
       if (timeout !== undefined && timeout !== Infinity && timeout > 0) {
         entry.timer = setTimeout(() => this._handleTimeout(entry), timeout);
-        // Don't keep the event loop alive just to fire a timeout.
-        if (typeof entry.timer.unref === 'function') entry.timer.unref();
+        // The timer must stay ref'd. An unref'd timer does not keep the
+        // event loop alive, so when the caller has nothing else pending,
+        // Node drains the loop and exits while this acquire() is still
+        // waiting - the promise never settles and never rejects.
+        //
+        // The timer is cleared in _grant() and _removeWaiter(), so a
+        // pending timeout only holds the loop for its own duration.
+        //
+        // Pass unrefTimeouts: true to opt back into the old behaviour
+        // when a timeout must never hold the process open.
+        if (this._unrefTimeouts && typeof entry.timer.unref === 'function') {
+          entry.timer.unref();
+        }
       } else if (timeout === 0) {
         // timeout=0 = poll once; if can't satisfy now, throw.
         // Remove ourselves from the queue and reject.
